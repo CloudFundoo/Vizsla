@@ -230,7 +230,7 @@ struct vec {
 };
 
 // Structure used by vz_stat() function. Uses 64 bit file length.
-struct mgstat {
+struct vzstat {
   int is_directory;  // Directory marker
   int64_t size;      // File size
   time_t mtime;      // Modification time
@@ -709,7 +709,7 @@ static void send_http_error(struct vz_connection *conn, int status,
   }
 }
 
-static int vz_stat(const char *path, struct mgstat *stp) {
+static int vz_stat(const char *path, struct vzstat *stp) {
   struct stat st;
   int ok;
 
@@ -1029,7 +1029,7 @@ int vz_get_cookie(const struct vz_connection *conn, const char *cookie_name,
 }
 
 static int convert_uri_to_file_name(struct vz_connection *conn, char *buf,
-                                    size_t buf_len, struct mgstat *st) {
+                                    size_t buf_len, struct vzstat *st) {
   struct vec a, b;
   const char *rewrite, *uri = conn->request_info.uri;
   char *p;
@@ -1502,7 +1502,7 @@ static FILE *open_auth_file(struct vz_connection *conn, const char *path) {
   struct vz_context *ctx = conn->ctx;
   char name[PATH_MAX];
   const char *p, *e;
-  struct mgstat st;
+  struct vzstat st;
   FILE *fp;
 
   if (ctx->config[GLOBAL_PASSWORDS_FILE] != NULL) {
@@ -1750,7 +1750,7 @@ int vz_modify_passwords_file(const char *fname, const char *domain,
 struct de {
   struct vz_connection *conn;
   char *file_name;
-  struct mgstat st;
+  struct vzstat st;
 };
 
 static void url_encode(const char *src, char *dst, size_t dst_len) {
@@ -1981,7 +1981,7 @@ static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
 }
 
 static void handle_file_request(struct vz_connection *conn, const char *path,
-                                struct mgstat *stp) {
+                                struct vzstat *stp) {
   char date[64], lm[64], etag[64], range[64];
   const char *msg = "OK", *hdr;
   time_t curtime = time(NULL);
@@ -2044,7 +2044,7 @@ static void handle_file_request(struct vz_connection *conn, const char *path,
 }
 
 void vz_send_file(struct vz_connection *conn, const char *path) {
-  struct mgstat st;
+  struct vzstat st;
   if (vz_stat(path, &st) == 0) {
     handle_file_request(conn, path, &st);
   } else {
@@ -2124,9 +2124,9 @@ static int read_request(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int bufsiz,
 // Return 0 if index file has been found, -1 if not found.
 // If the file is found, it's stats is returned in stp.
 static int substitute_index_file(struct vz_connection *conn, char *path,
-                                 size_t path_len, struct mgstat *stp) {
+                                 size_t path_len, struct vzstat *stp) {
   const char *list = conn->ctx->config[INDEX_FILES];
-  struct mgstat st;
+  struct vzstat st;
   struct vec filename_vec;
   size_t n = strlen(path);
   int found = 0;
@@ -2169,7 +2169,7 @@ static int substitute_index_file(struct vz_connection *conn, char *path,
 
 // Return True if we should reply 304 Not Modified.
 static int is_not_modified(const struct vz_connection *conn,
-                           const struct mgstat *stp) {
+                           const struct vzstat *stp) {
   const char *ims = vz_get_header(conn, "If-Modified-Since");
   return ims != NULL && stp->mtime <= parse_date_string(ims);
 }
@@ -2511,7 +2511,7 @@ done:
 static int put_dir(const char *path) {
   char buf[PATH_MAX];
   const char *s, *p;
-  struct mgstat st;
+  struct vzstat st;
   int len, res = 1;
 
   for (s = p = path + 2; (p = strchr(s, DIRSEP)) != NULL; s = ++p) {
@@ -2540,7 +2540,7 @@ static int put_dir(const char *path) {
 }
 
 static void put_file(struct vz_connection *conn, const char *path) {
-  struct mgstat st;
+  struct vzstat st;
   const char *range;
   int64_t r1, r2;
   FILE *fp;
@@ -2727,7 +2727,7 @@ static void send_options(struct vz_connection *conn) {
 
 // Writes PROPFIND properties for a collection element
 static void print_props(struct vz_connection *conn, const char* uri,
-                        struct mgstat* st) {
+                        struct vzstat* st) {
   char mtime[64];
   gmt_time_string(mtime, sizeof(mtime), &st->mtime);
   conn->num_bytes_sent += vz_printf(conn,
@@ -2757,7 +2757,7 @@ static void print_dav_dir_entry(struct de *de, void *data) {
 }
 
 static void handle_propfind(struct vz_connection *conn, const char* path,
-                            struct mgstat* st) {
+                            struct vzstat* st) {
   const char *depth = vz_get_header(conn, "Depth");
 
   conn->must_close = 1;
@@ -2791,7 +2791,7 @@ static void handle_request(struct vz_connection *conn) {
   struct vz_request_info *ri = &conn->request_info;
   char path[PATH_MAX];
   int stat_result, uri_len;
-  struct mgstat st;
+  struct vzstat st;
 
   if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
     * conn->request_info.query_string++ = '\0';
@@ -3219,9 +3219,9 @@ static void uninitialize_ssl(struct vz_context *ctx) {
 #endif // !NO_SSL
 
 static int set_gpass_option(struct vz_context *ctx) {
-  struct mgstat mgstat;
+  struct vzstat vzstat;
   const char *path = ctx->config[GLOBAL_PASSWORDS_FILE];
-  return path == NULL || vz_stat(path, &mgstat) == 0;
+  return path == NULL || vz_stat(path, &vzstat) == 0;
 }
 
 static int set_acl_option(struct vz_context *ctx) {
