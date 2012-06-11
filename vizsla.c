@@ -55,10 +55,10 @@
 #define O_BINARY  0
 #endif // O_BINARY
 #define closesocket(a) close(a)
-#define mg_fopen(x, y) fopen(x, y)
-#define mg_mkdir(x, y) mkdir(x, y)
-#define mg_remove(x) remove(x)
-#define mg_rename(x, y) rename(x, y)
+#define vz_fopen(x, y) fopen(x, y)
+#define vz_mkdir(x, y) mkdir(x, y)
+#define vz_remove(x) remove(x)
+#define vz_rename(x, y) rename(x, y)
 #define ERRNO errno
 #define INVALID_SOCKET (-1)
 #define INT64_FMT PRId64
@@ -96,7 +96,7 @@ typedef int socklen_t;
 #define MSG_NOSIGNAL 0
 #endif
 
-typedef void * (*mg_thread_func_t)(void *);
+typedef void * (*vz_thread_func_t)(void *);
 
 static const char *http_500_error = "Internal Server Error";
 
@@ -128,7 +128,7 @@ extern void SSL_load_error_strings(void);
 extern int SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
 extern int SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
 extern int SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *);
-extern void SSL_CTX_set_default_passwd_cb(SSL_CTX *, mg_callback_t);
+extern void SSL_CTX_set_default_passwd_cb(SSL_CTX *, vz_callback_t);
 extern void SSL_CTX_free(SSL_CTX *);
 extern unsigned long ERR_get_error(void);
 extern char *ERR_error_string(unsigned long, char *);
@@ -158,7 +158,7 @@ struct ssl_func {
 #define SSL_CTX_use_certificate_file (* (int (*)(SSL_CTX *, \
         const char *, int)) ssl_sw[12].ptr)
 #define SSL_CTX_set_default_passwd_cb \
-  (* (void (*)(SSL_CTX *, mg_callback_t)) ssl_sw[13].ptr)
+  (* (void (*)(SSL_CTX *, vz_callback_t)) ssl_sw[13].ptr)
 #define SSL_CTX_free (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)
 #define SSL_load_error_strings (* (void (*)(void)) ssl_sw[15].ptr)
 #define SSL_CTX_use_certificate_chain_file \
@@ -229,7 +229,7 @@ struct vec {
   size_t len;
 };
 
-// Structure used by mg_stat() function. Uses 64 bit file length.
+// Structure used by vz_stat() function. Uses 64 bit file length.
 struct mgstat {
   int is_directory;  // Directory marker
   int64_t size;      // File size
@@ -285,11 +285,11 @@ static const char *config_options[] = {
 };
 #define ENTRIES_PER_CONFIG_OPTION 3
 
-struct mg_context {
+struct vz_context {
   volatile int stop_flag;       // Should we stop event loop
   SSL_CTX *ssl_ctx;             // SSL context
   char *config[NUM_OPTIONS];    // Mongoose configuration parameters
-  mg_callback_t user_callback;  // User-defined callback function
+  vz_callback_t user_callback;  // User-defined callback function
   void *user_data;              // User-defined data
 
   struct socket *listening_sockets;
@@ -305,9 +305,9 @@ struct mg_context {
   pthread_cond_t sq_empty;   // Signaled when socket is consumed
 };
 
-struct mg_connection {
-  struct mg_request_info request_info;
-  struct mg_context *ctx;
+struct vz_connection {
+  struct vz_request_info request_info;
+  struct vz_context *ctx;
   SSL *ssl;                   // SSL descriptor
   struct socket client;       // Connected client
   time_t birth_time;          // Time connection was accepted
@@ -322,11 +322,11 @@ struct mg_connection {
   int data_len;               // Total size of data in a buffer
 };
 
-const char **mg_get_valid_option_names(void) {
+const char **vz_get_valid_option_names(void) {
   return config_options;
 }
 
-static void *call_user(struct mg_connection *conn, enum mg_event event) {
+static void *call_user(struct vz_connection *conn, enum vz_event event) {
   conn->request_info.user_data = conn->ctx->user_data;
   return conn->ctx->user_callback == NULL ? NULL :
     conn->ctx->user_callback(event, conn, &conn->request_info);
@@ -344,7 +344,7 @@ static int get_option_index(const char *name) {
   return -1;
 }
 
-const char *mg_get_option(const struct mg_context *ctx, const char *name) {
+const char *vz_get_option(const struct vz_context *ctx, const char *name) {
   int i;
   if ((i = get_option_index(name)) == -1) {
     return NULL;
@@ -368,7 +368,7 @@ static void sockaddr_to_string(char *buf, size_t len,
 }
 
 // Print error message to the opened error log stream.
-static void cry(struct mg_connection *conn, const char *fmt, ...) {
+static void cry(struct vz_connection *conn, const char *fmt, ...) {
   char buf[BUFSIZ], src_addr[20];
   va_list ap;
   FILE *fp;
@@ -384,7 +384,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   conn->request_info.log_message = buf;
   if (call_user(conn, MG_EVENT_LOG) == NULL) {
     fp = conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
-      mg_fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
+      vz_fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
 
     if (fp != NULL) {
       flockfile(fp);
@@ -419,17 +419,17 @@ static const char *ssl_error(void) {
 
 // Return fake connection structure. Used for logging, if connection
 // is not applicable at the moment of logging.
-static struct mg_connection *fc(struct mg_context *ctx) {
-  static struct mg_connection fake_connection;
+static struct vz_connection *fc(struct vz_context *ctx) {
+  static struct vz_connection fake_connection;
   fake_connection.ctx = ctx;
   return &fake_connection;
 }
 
-const char *mg_version(void) {
+const char *vz_version(void) {
   return MONGOOSE_VERSION;
 }
 
-static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
+static void vz_strlcpy(register char *dst, register const char *src, size_t n) {
   for (; *src != '\0' && n > 1; n--) {
     *dst++ = *src++;
   }
@@ -440,7 +440,7 @@ static int lowercase(const char *s) {
   return tolower(* (const unsigned char *) s);
 }
 
-static int mg_strncasecmp(const char *s1, const char *s2, size_t len) {
+static int vz_strncasecmp(const char *s1, const char *s2, size_t len) {
   int diff = 0;
 
   if (len > 0)
@@ -451,7 +451,7 @@ static int mg_strncasecmp(const char *s1, const char *s2, size_t len) {
   return diff;
 }
 
-static int mg_strcasecmp(const char *s1, const char *s2) {
+static int vz_strcasecmp(const char *s1, const char *s2) {
   int diff;
 
   do {
@@ -461,25 +461,25 @@ static int mg_strcasecmp(const char *s1, const char *s2) {
   return diff;
 }
 
-static char * mg_strndup(const char *ptr, size_t len) {
+static char * vz_strndup(const char *ptr, size_t len) {
   char *p;
 
   if ((p = (char *) malloc(len + 1)) != NULL) {
-    mg_strlcpy(p, ptr, len + 1);
+    vz_strlcpy(p, ptr, len + 1);
   }
 
   return p;
 }
 
-static char * mg_strdup(const char *str) {
-  return mg_strndup(str, strlen(str));
+static char * vz_strdup(const char *str) {
+  return vz_strndup(str, strlen(str));
 }
 
 // Like snprintf(), but never returns negative value, or the value
 // that is larger than a supplied buffer.
 // Thanks to Adam Zeldis to pointing snprintf()-caused vulnerability
 // in his audit report.
-static int mg_vsnprintf(struct mg_connection *conn, char *buf, size_t buflen,
+static int vz_vsnprintf(struct vz_connection *conn, char *buf, size_t buflen,
                         const char *fmt, va_list ap) {
   int n;
 
@@ -501,13 +501,13 @@ static int mg_vsnprintf(struct mg_connection *conn, char *buf, size_t buflen,
   return n;
 }
 
-static int mg_snprintf(struct mg_connection *conn, char *buf, size_t buflen,
+static int vz_snprintf(struct vz_connection *conn, char *buf, size_t buflen,
                        const char *fmt, ...) {
   va_list ap;
   int n;
 
   va_start(ap, fmt);
-  n = mg_vsnprintf(conn, buf, buflen, fmt, ap);
+  n = vz_vsnprintf(conn, buf, buflen, fmt, ap);
   va_end(ap);
 
   return n;
@@ -566,18 +566,18 @@ static char *skip(char **buf, const char *delimiters) {
 
 
 // Return HTTP header value, or NULL if not found.
-static const char *get_header(const struct mg_request_info *ri,
+static const char *get_header(const struct vz_request_info *ri,
                               const char *name) {
   int i;
 
   for (i = 0; i < ri->num_headers; i++)
-    if (!mg_strcasecmp(name, ri->http_headers[i].name))
+    if (!vz_strcasecmp(name, ri->http_headers[i].name))
       return ri->http_headers[i].value;
 
   return NULL;
 }
 
-const char *mg_get_header(const struct mg_connection *conn, const char *name) {
+const char *vz_get_header(const struct vz_connection *conn, const char *name) {
   return get_header(&conn->request_info, name);
 }
 
@@ -662,21 +662,21 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
 // HTTP 1.1 assumes keep alive if "Connection:" header is not set
 // This function must tolerate situations when connection info is not
 // set up, for example if request parsing failed.
-static int should_keep_alive(const struct mg_connection *conn) {
+static int should_keep_alive(const struct vz_connection *conn) {
   const char *http_version = conn->request_info.http_version;
-  const char *header = mg_get_header(conn, "Connection");
+  const char *header = vz_get_header(conn, "Connection");
   return (!conn->must_close &&
           !conn->request_info.status_code != 401 &&
-          !mg_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") &&
+          !vz_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") &&
           (header == NULL && http_version && !strcmp(http_version, "1.1"))) ||
-          (header != NULL && !mg_strcasecmp(header, "keep-alive"));
+          (header != NULL && !vz_strcasecmp(header, "keep-alive"));
 }
 
-static const char *suggest_connection_header(const struct mg_connection *conn) {
+static const char *suggest_connection_header(const struct vz_connection *conn) {
   return should_keep_alive(conn) ? "keep-alive" : "close";
 }
 
-static void send_http_error(struct mg_connection *conn, int status,
+static void send_http_error(struct vz_connection *conn, int status,
                             const char *reason, const char *fmt, ...) {
   char buf[BUFSIZ];
   va_list ap;
@@ -690,26 +690,26 @@ static void send_http_error(struct mg_connection *conn, int status,
 
     // Errors 1xx, 204 and 304 MUST NOT send a body
     if (status > 199 && status != 204 && status != 304) {
-      len = mg_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
+      len = vz_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
       cry(conn, "%s", buf);
       buf[len++] = '\n';
 
       va_start(ap, fmt);
-      len += mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
+      len += vz_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
       va_end(ap);
     }
     DEBUG_TRACE(("[%s]", buf));
 
-    mg_printf(conn, "HTTP/1.1 %d %s\r\n"
+    vz_printf(conn, "HTTP/1.1 %d %s\r\n"
               "Content-Type: text/plain\r\n"
               "Content-Length: %d\r\n"
               "Connection: %s\r\n\r\n", status, reason, len,
               suggest_connection_header(conn));
-    conn->num_bytes_sent += mg_printf(conn, "%s", buf);
+    conn->num_bytes_sent += vz_printf(conn, "%s", buf);
   }
 }
 
-static int mg_stat(const char *path, struct mgstat *stp) {
+static int vz_stat(const char *path, struct mgstat *stp) {
   struct stat st;
   int ok;
 
@@ -729,7 +729,7 @@ static void set_close_on_exec(int fd) {
   (void) fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
-static int start_thread(struct mg_context *ctx, mg_thread_func_t func,
+static int start_thread(struct vz_context *ctx, vz_thread_func_t func,
                         void *param) {
   pthread_t thread_id;
   pthread_attr_t attr;
@@ -738,7 +738,7 @@ static int start_thread(struct mg_context *ctx, mg_thread_func_t func,
   (void) pthread_attr_init(&attr);
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
   // TODO(lsm): figure out why vizsla dies on Linux if next line is enabled
-  // (void) pthread_attr_setstacksize(&attr, sizeof(struct mg_connection) * 5);
+  // (void) pthread_attr_setstacksize(&attr, sizeof(struct vz_connection) * 5);
 
   if ((retval = pthread_create(&thread_id, &attr, func, param)) != 0) {
     cry(fc(ctx), "%s: %s", __func__, strerror(retval));
@@ -748,7 +748,7 @@ static int start_thread(struct mg_context *ctx, mg_thread_func_t func,
 }
 
 #ifndef NO_CGI
-static pid_t spawn_process(struct mg_connection *conn, const char *prog,
+static pid_t spawn_process(struct vz_connection *conn, const char *prog,
                            char *envblk, char *envp[], int fd_stdin,
                            int fd_stdout, const char *dir) {
   pid_t pid;
@@ -856,7 +856,7 @@ static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
   return nread;
 }
 
-int mg_read(struct mg_connection *conn, void *buf, size_t len) {
+int vz_read(struct vz_connection *conn, void *buf, size_t len) {
   int n, buffered_len, nread;
   const char *buffered;
 
@@ -906,21 +906,21 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   return nread;
 }
 
-int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
+int vz_write(struct vz_connection *conn, const void *buf, size_t len) {
   return (int) push(NULL, conn->client.sock, conn->ssl, (const char *) buf,
                     (int64_t) len);
 }
 
-int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
+int vz_printf(struct vz_connection *conn, const char *fmt, ...) {
   char buf[BUFSIZ];
   int len;
   va_list ap;
 
   va_start(ap, fmt);
-  len = mg_vsnprintf(conn, buf, sizeof(buf), fmt, ap);
+  len = vz_vsnprintf(conn, buf, sizeof(buf), fmt, ap);
   va_end(ap);
 
-  return mg_write(conn, buf, (size_t)len);
+  return vz_write(conn, buf, (size_t)len);
 }
 
 // URL-decode input buffer into destination buffer.
@@ -958,7 +958,7 @@ static size_t url_decode(const char *src, size_t src_len, char *dst,
 // It can be specified in query string, or in the POST data.
 // Return NULL if the variable not found, or allocated 0-terminated value.
 // It is caller's responsibility to free the returned value.
-int mg_get_var(const char *buf, size_t buf_len, const char *name,
+int vz_get_var(const char *buf, size_t buf_len, const char *name,
                char *dst, size_t dst_len) {
   const char *p, *e, *s;
   size_t name_len, len;
@@ -971,7 +971,7 @@ int mg_get_var(const char *buf, size_t buf_len, const char *name,
   // buf is "var1=val1&var2=val2...". Find variable first
   for (p = buf; p != NULL && p + name_len < e; p++) {
     if ((p == buf || p[-1] == '&') && p[name_len] == '=' &&
-        !mg_strncasecmp(name, p, name_len)) {
+        !vz_strncasecmp(name, p, name_len)) {
 
       // Point p to variable value
       p += name_len + 1;
@@ -994,13 +994,13 @@ int mg_get_var(const char *buf, size_t buf_len, const char *name,
   return len;
 }
 
-int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
+int vz_get_cookie(const struct vz_connection *conn, const char *cookie_name,
                   char *dst, size_t dst_size) {
   const char *s, *p, *end;
   int name_len, len = -1;
 
   dst[0] = '\0';
-  if ((s = mg_get_header(conn, "Cookie")) == NULL) {
+  if ((s = vz_get_header(conn, "Cookie")) == NULL) {
     return 0;
   }
 
@@ -1020,7 +1020,7 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
       }
       if ((size_t) (p - s) < dst_size) {
         len = (p - s) + 1;
-        mg_strlcpy(dst, s, (size_t)len);
+        vz_strlcpy(dst, s, (size_t)len);
       }
       break;
     }
@@ -1028,7 +1028,7 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
   return len;
 }
 
-static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
+static int convert_uri_to_file_name(struct vz_connection *conn, char *buf,
                                     size_t buf_len, struct mgstat *st) {
   struct vec a, b;
   const char *rewrite, *uri = conn->request_info.uri;
@@ -1037,25 +1037,25 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
 
   buf_len--;  // This is because memmove() for PATH_INFO may shift part
               // of the path one byte on the right.
-  mg_snprintf(conn, buf, buf_len, "%s%s", conn->ctx->config[DOCUMENT_ROOT],
+  vz_snprintf(conn, buf, buf_len, "%s%s", conn->ctx->config[DOCUMENT_ROOT],
               uri);
 
   rewrite = conn->ctx->config[REWRITE];
   while ((rewrite = next_option(rewrite, &a, &b)) != NULL) {
     if ((match_len = match_prefix(a.ptr, a.len, uri)) > 0) {
-      mg_snprintf(conn, buf, buf_len, "%.*s%s", b.len, b.ptr, uri + match_len);
+      vz_snprintf(conn, buf, buf_len, "%.*s%s", b.len, b.ptr, uri + match_len);
       break;
     }
   }
 
-  if ((stat_result = mg_stat(buf, st)) != 0) {
+  if ((stat_result = vz_stat(buf, st)) != 0) {
     // Support PATH_INFO for CGI scripts.
     for (p = buf + strlen(buf); p > buf + 1; p--) {
       if (*p == '/') {
         *p = '\0';
         if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
                          strlen(conn->ctx->config[CGI_EXTENSIONS]), buf) > 0 &&
-            (stat_result = mg_stat(buf, st)) == 0) {
+            (stat_result = vz_stat(buf, st)) == 0) {
           conn->path_info = p + 1;
           memmove(p + 2, p + 1, strlen(p + 1));
           p[1] = '/';
@@ -1071,7 +1071,7 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   return stat_result;
 }
 
-static int sslize(struct mg_connection *conn, int (*func)(SSL *)) {
+static int sslize(struct vz_connection *conn, int (*func)(SSL *)) {
   return (conn->ssl = SSL_new(conn->ctx->ssl_ctx)) != NULL &&
     SSL_set_fd(conn->ssl, conn->client.sock) == 1 &&
     func(conn->ssl) == 1;
@@ -1213,7 +1213,7 @@ static const struct {
 
 // Look at the "path" extension and figure what mime type it has.
 // Store mime type in the vector.
-static void get_mime_type(struct mg_context *ctx, const char *path,
+static void get_mime_type(struct vz_context *ctx, const char *path,
                           struct vec *vec) {
   struct vec ext_vec, mime_vec;
   const char *list, *ext;
@@ -1227,7 +1227,7 @@ static void get_mime_type(struct mg_context *ctx, const char *path,
   while ((list = next_option(list, &ext_vec, &mime_vec)) != NULL) {
     // ext now points to the path suffix
     ext = path + path_len - ext_vec.len;
-    if (mg_strncasecmp(ext, ext_vec.ptr, ext_vec.len) == 0) {
+    if (vz_strncasecmp(ext, ext_vec.ptr, ext_vec.len) == 0) {
       *vec = mime_vec;
       return;
     }
@@ -1237,7 +1237,7 @@ static void get_mime_type(struct mg_context *ctx, const char *path,
   for (i = 0; builtin_mime_types[i].extension != NULL; i++) {
     ext = path + (path_len - builtin_mime_types[i].ext_len);
     if (path_len > builtin_mime_types[i].ext_len &&
-        mg_strcasecmp(ext, builtin_mime_types[i].extension) == 0) {
+        vz_strcasecmp(ext, builtin_mime_types[i].extension) == 0) {
       vec->ptr = builtin_mime_types[i].mime_type;
       vec->len = builtin_mime_types[i].mime_type_len;
       return;
@@ -1450,7 +1450,7 @@ static void bin2str(char *to, const unsigned char *p, size_t len) {
 }
 
 // Return stringified MD5 hash for list of vectors. Buffer must be 33 bytes.
-void mg_md5(char *buf, ...) {
+void vz_md5(char *buf, ...) {
   unsigned char hash[16];
   const char *p;
   va_list ap;
@@ -1489,17 +1489,17 @@ static int check_password(const char *method, const char *ha1, const char *uri,
     return 0;
   }
 
-  mg_md5(ha2, method, ":", uri, NULL);
-  mg_md5(expected_response, ha1, ":", nonce, ":", nc,
+  vz_md5(ha2, method, ":", uri, NULL);
+  vz_md5(expected_response, ha1, ":", nonce, ":", nc,
       ":", cnonce, ":", qop, ":", ha2, NULL);
 
-  return mg_strcasecmp(response, expected_response) == 0;
+  return vz_strcasecmp(response, expected_response) == 0;
 }
 
 // Use the global passwords file, if specified by auth_gpass option,
 // or search for .htpasswd in the requested directory.
-static FILE *open_auth_file(struct mg_connection *conn, const char *path) {
-  struct mg_context *ctx = conn->ctx;
+static FILE *open_auth_file(struct vz_connection *conn, const char *path) {
+  struct vz_context *ctx = conn->ctx;
   char name[PATH_MAX];
   const char *p, *e;
   struct mgstat st;
@@ -1507,22 +1507,22 @@ static FILE *open_auth_file(struct mg_connection *conn, const char *path) {
 
   if (ctx->config[GLOBAL_PASSWORDS_FILE] != NULL) {
     // Use global passwords file
-    fp =  mg_fopen(ctx->config[GLOBAL_PASSWORDS_FILE], "r");
+    fp =  vz_fopen(ctx->config[GLOBAL_PASSWORDS_FILE], "r");
     if (fp == NULL)
       cry(fc(ctx), "fopen(%s): %s",
           ctx->config[GLOBAL_PASSWORDS_FILE], strerror(ERRNO));
-  } else if (!mg_stat(path, &st) && st.is_directory) {
-    (void) mg_snprintf(conn, name, sizeof(name), "%s%c%s",
+  } else if (!vz_stat(path, &st) && st.is_directory) {
+    (void) vz_snprintf(conn, name, sizeof(name), "%s%c%s",
         path, DIRSEP, PASSWORDS_FILE_NAME);
-    fp = mg_fopen(name, "r");
+    fp = vz_fopen(name, "r");
   } else {
      // Try to find .htpasswd in requested directory.
     for (p = path, e = p + strlen(p) - 1; e > p; e--)
       if (IS_DIRSEP_CHAR(*e))
         break;
-    (void) mg_snprintf(conn, name, sizeof(name), "%.*s%c%s",
+    (void) vz_snprintf(conn, name, sizeof(name), "%.*s%c%s",
         (int) (e - p), p, DIRSEP, PASSWORDS_FILE_NAME);
-    fp = mg_fopen(name, "r");
+    fp = vz_fopen(name, "r");
   }
 
   return fp;
@@ -1533,18 +1533,18 @@ struct ah {
   char *user, *uri, *cnonce, *response, *qop, *nc, *nonce;
 };
 
-static int parse_auth_header(struct mg_connection *conn, char *buf,
+static int parse_auth_header(struct vz_connection *conn, char *buf,
                              size_t buf_size, struct ah *ah) {
   char *name, *value, *s;
   const char *auth_header;
 
-  if ((auth_header = mg_get_header(conn, "Authorization")) == NULL ||
-      mg_strncasecmp(auth_header, "Digest ", 7) != 0) {
+  if ((auth_header = vz_get_header(conn, "Authorization")) == NULL ||
+      vz_strncasecmp(auth_header, "Digest ", 7) != 0) {
     return 0;
   }
 
   // Make modifiable copy of the auth header
-  (void) mg_strlcpy(buf, auth_header + 7, buf_size);
+  (void) vz_strlcpy(buf, auth_header + 7, buf_size);
 
   s = buf;
   (void) memset(ah, 0, sizeof(*ah));
@@ -1589,7 +1589,7 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
 
   // CGI needs it as REMOTE_USER
   if (ah->user != NULL) {
-    conn->request_info.remote_user = mg_strdup(ah->user);
+    conn->request_info.remote_user = vz_strdup(ah->user);
   } else {
     return 0;
   }
@@ -1598,7 +1598,7 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
 }
 
 // Authorize against the opened passwords file. Return 1 if authorized.
-static int authorize(struct mg_connection *conn, FILE *fp) {
+static int authorize(struct vz_connection *conn, FILE *fp) {
   struct ah ah;
   char line[256], f_user[256], ha1[256], f_domain[256], buf[BUFSIZ];
 
@@ -1624,7 +1624,7 @@ static int authorize(struct mg_connection *conn, FILE *fp) {
 }
 
 // Return 1 if request is authorised, 0 otherwise.
-static int check_authorization(struct mg_connection *conn, const char *path) {
+static int check_authorization(struct vz_connection *conn, const char *path) {
   FILE *fp;
   char fname[PATH_MAX];
   struct vec uri_vec, filename_vec;
@@ -1637,9 +1637,9 @@ static int check_authorization(struct mg_connection *conn, const char *path) {
   list = conn->ctx->config[PROTECT_URI];
   while ((list = next_option(list, &uri_vec, &filename_vec)) != NULL) {
     if (!memcmp(conn->request_info.uri, uri_vec.ptr, uri_vec.len)) {
-      (void) mg_snprintf(conn, fname, sizeof(fname), "%.*s",
+      (void) vz_snprintf(conn, fname, sizeof(fname), "%.*s",
           filename_vec.len, filename_vec.ptr);
-      if ((fp = mg_fopen(fname, "r")) == NULL) {
+      if ((fp = vz_fopen(fname, "r")) == NULL) {
         cry(conn, "%s: cannot open %s: %s", __func__, fname, strerror(errno));
       }
       break;
@@ -1658,9 +1658,9 @@ static int check_authorization(struct mg_connection *conn, const char *path) {
   return authorized;
 }
 
-static void send_authorization_request(struct mg_connection *conn) {
+static void send_authorization_request(struct vz_connection *conn) {
   conn->request_info.status_code = 401;
-  (void) mg_printf(conn,
+  (void) vz_printf(conn,
       "HTTP/1.1 401 Unauthorized\r\n"
       "Content-Length: 0\r\n"
       "WWW-Authenticate: Digest qop=\"auth\", "
@@ -1669,12 +1669,12 @@ static void send_authorization_request(struct mg_connection *conn) {
       (unsigned long) time(NULL));
 }
 
-static int is_authorized_for_put(struct mg_connection *conn) {
+static int is_authorized_for_put(struct vz_connection *conn) {
   FILE *fp;
   int ret = 0;
 
   fp = conn->ctx->config[PUT_DELETE_PASSWORDS_FILE] == NULL ? NULL :
-    mg_fopen(conn->ctx->config[PUT_DELETE_PASSWORDS_FILE], "r");
+    vz_fopen(conn->ctx->config[PUT_DELETE_PASSWORDS_FILE], "r");
 
   if (fp != NULL) {
     ret = authorize(conn, fp);
@@ -1684,7 +1684,7 @@ static int is_authorized_for_put(struct mg_connection *conn) {
   return ret;
 }
 
-int mg_modify_passwords_file(const char *fname, const char *domain,
+int vz_modify_passwords_file(const char *fname, const char *domain,
                              const char *user, const char *pass) {
   int found;
   char line[512], u[512], d[512], ha1[33], tmp[PATH_MAX];
@@ -1701,14 +1701,14 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
   (void) snprintf(tmp, sizeof(tmp), "%s.tmp", fname);
 
   // Create the file if does not exist
-  if ((fp = mg_fopen(fname, "a+")) != NULL) {
+  if ((fp = vz_fopen(fname, "a+")) != NULL) {
     (void) fclose(fp);
   }
 
   // Open the given file and temporary file
-  if ((fp = mg_fopen(fname, "r")) == NULL) {
+  if ((fp = vz_fopen(fname, "r")) == NULL) {
     return 0;
-  } else if ((fp2 = mg_fopen(tmp, "w+")) == NULL) {
+  } else if ((fp2 = vz_fopen(tmp, "w+")) == NULL) {
     fclose(fp);
     return 0;
   }
@@ -1722,7 +1722,7 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
     if (!strcmp(u, user) && !strcmp(d, domain)) {
       found++;
       if (pass != NULL) {
-        mg_md5(ha1, user, ":", domain, ":", pass, NULL);
+        vz_md5(ha1, user, ":", domain, ":", pass, NULL);
         fprintf(fp2, "%s:%s:%s\n", user, domain, ha1);
       }
     } else {
@@ -1732,7 +1732,7 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
 
   // If new user, just add it
   if (!found && pass != NULL) {
-    mg_md5(ha1, user, ":", domain, ":", pass, NULL);
+    vz_md5(ha1, user, ":", domain, ":", pass, NULL);
     (void) fprintf(fp2, "%s:%s:%s\n", user, domain, ha1);
   }
 
@@ -1741,14 +1741,14 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
   (void) fclose(fp2);
 
   // Put the temp file in place of real file
-  (void) mg_remove(fname);
-  (void) mg_rename(tmp, fname);
+  (void) vz_remove(fname);
+  (void) vz_rename(tmp, fname);
 
   return 1;
 }
 
 struct de {
-  struct mg_connection *conn;
+  struct vz_connection *conn;
   char *file_name;
   struct mgstat st;
 };
@@ -1777,27 +1777,27 @@ static void print_dir_entry(struct de *de) {
   char size[64], mod[64], href[PATH_MAX];
 
   if (de->st.is_directory) {
-    (void) mg_snprintf(de->conn, size, sizeof(size), "%s", "[DIRECTORY]");
+    (void) vz_snprintf(de->conn, size, sizeof(size), "%s", "[DIRECTORY]");
   } else {
      // We use (signed) cast below because MSVC 6 compiler cannot
      // convert unsigned __int64 to double. Sigh.
     if (de->st.size < 1024) {
-      (void) mg_snprintf(de->conn, size, sizeof(size),
+      (void) vz_snprintf(de->conn, size, sizeof(size),
           "%lu", (unsigned long) de->st.size);
     } else if (de->st.size < 1024 * 1024) {
-      (void) mg_snprintf(de->conn, size, sizeof(size),
+      (void) vz_snprintf(de->conn, size, sizeof(size),
           "%.1fk", (double) de->st.size / 1024.0);
     } else if (de->st.size < 1024 * 1024 * 1024) {
-      (void) mg_snprintf(de->conn, size, sizeof(size),
+      (void) vz_snprintf(de->conn, size, sizeof(size),
           "%.1fM", (double) de->st.size / 1048576);
     } else {
-      (void) mg_snprintf(de->conn, size, sizeof(size),
+      (void) vz_snprintf(de->conn, size, sizeof(size),
           "%.1fG", (double) de->st.size / 1073741824);
     }
   }
   (void) strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&de->st.mtime));
   url_encode(de->file_name, href, sizeof(href));
-  de->conn->num_bytes_sent += mg_printf(de->conn,
+  de->conn->num_bytes_sent += vz_printf(de->conn,
       "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
       "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
       de->conn->request_info.uri, href, de->st.is_directory ? "/" : "",
@@ -1834,7 +1834,7 @@ static int compare_dir_entries(const void *p1, const void *p2) {
   return query_string[1] == 'd' ? -cmp_result : cmp_result;
 }
 
-static int scan_directory(struct mg_connection *conn, const char *dir,
+static int scan_directory(struct vz_connection *conn, const char *dir,
                           void *data, void (*cb)(struct de *, void *)) {
   char path[PATH_MAX];
   struct dirent *dp;
@@ -1853,14 +1853,14 @@ static int scan_directory(struct mg_connection *conn, const char *dir,
           !strcmp(dp->d_name, PASSWORDS_FILE_NAME))
         continue;
 
-      mg_snprintf(conn, path, sizeof(path), "%s%c%s", dir, DIRSEP, dp->d_name);
+      vz_snprintf(conn, path, sizeof(path), "%s%c%s", dir, DIRSEP, dp->d_name);
 
       // If we don't memset stat structure to zero, mtime will have
       // garbage and strftime() will segfault later on in
-      // print_dir_entry(). memset is required only if mg_stat()
+      // print_dir_entry(). memset is required only if vz_stat()
       // fails. For more details, see
       // http://code.google.com/p/mongoose/issues/detail?id=79
-      if (mg_stat(path, &de.st) != 0) {
+      if (vz_stat(path, &de.st) != 0) {
         memset(&de.st, 0, sizeof(de.st));
       }
       de.file_name = dp->d_name;
@@ -1890,14 +1890,14 @@ static void dir_scan_callback(struct de *de, void *data) {
     // TODO(lsm): propagate an error to the caller
     dsd->num_entries = 0;
   } else {
-    dsd->entries[dsd->num_entries].file_name = mg_strdup(de->file_name);
+    dsd->entries[dsd->num_entries].file_name = vz_strdup(de->file_name);
     dsd->entries[dsd->num_entries].st = de->st;
     dsd->entries[dsd->num_entries].conn = de->conn;
     dsd->num_entries++;
   }
 }
 
-static void handle_directory_request(struct mg_connection *conn,
+static void handle_directory_request(struct vz_connection *conn,
                                      const char *dir) {
   int i, sort_direction;
   struct dir_scan_data data = { NULL, 0, 128 };
@@ -1912,12 +1912,12 @@ static void handle_directory_request(struct mg_connection *conn,
     conn->request_info.query_string[1] == 'd' ? 'a' : 'd';
 
   conn->must_close = 1;
-  mg_printf(conn, "%s",
+  vz_printf(conn, "%s",
             "HTTP/1.1 200 OK\r\n"
             "Connection: close\r\n"
             "Content-Type: text/html; charset=utf-8\r\n\r\n");
 
-  conn->num_bytes_sent += mg_printf(conn,
+  conn->num_bytes_sent += vz_printf(conn,
       "<html><head><title>Index of %s</title>"
       "<style>th {text-align: left;}</style></head>"
       "<body><h1>Index of %s</h1><pre><table cellpadding=\"0\">"
@@ -1929,7 +1929,7 @@ static void handle_directory_request(struct mg_connection *conn,
       sort_direction, sort_direction, sort_direction);
 
   // Print first entry - link to a parent directory
-  conn->num_bytes_sent += mg_printf(conn,
+  conn->num_bytes_sent += vz_printf(conn,
       "<tr><td><a href=\"%s%s\">%s</a></td>"
       "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
       conn->request_info.uri, "..", "Parent directory", "-", "-");
@@ -1943,12 +1943,12 @@ static void handle_directory_request(struct mg_connection *conn,
   }
   free(data.entries);
 
-  conn->num_bytes_sent += mg_printf(conn, "%s", "</table></body></html>");
+  conn->num_bytes_sent += vz_printf(conn, "%s", "</table></body></html>");
   conn->request_info.status_code = 200;
 }
 
 // Send len bytes from the opened file to the client.
-static void send_file_data(struct mg_connection *conn, FILE *fp, int64_t len) {
+static void send_file_data(struct vz_connection *conn, FILE *fp, int64_t len) {
   char buf[BUFSIZ];
   int to_read, num_read, num_written;
 
@@ -1963,7 +1963,7 @@ static void send_file_data(struct mg_connection *conn, FILE *fp, int64_t len) {
       break;
 
     // Send read bytes to the client, exit the loop on error
-    if ((num_written = mg_write(conn, buf, (size_t)num_read)) != num_read)
+    if ((num_written = vz_write(conn, buf, (size_t)num_read)) != num_read)
       break;
 
     // Both read and were successful, adjust counters
@@ -1980,7 +1980,7 @@ static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
   strftime(buf, buf_len, "%a, %d %b %Y %H:%M:%S GMT", gmtime(t));
 }
 
-static void handle_file_request(struct mg_connection *conn, const char *path,
+static void handle_file_request(struct vz_connection *conn, const char *path,
                                 struct mgstat *stp) {
   char date[64], lm[64], etag[64], range[64];
   const char *msg = "OK", *hdr;
@@ -1995,7 +1995,7 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   conn->request_info.status_code = 200;
   range[0] = '\0';
 
-  if ((fp = mg_fopen(path, "rb")) == NULL) {
+  if ((fp = vz_fopen(path, "rb")) == NULL) {
     send_http_error(conn, 500, http_500_error,
         "fopen(%s): %s", path, strerror(ERRNO));
     return;
@@ -2004,12 +2004,12 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
 
   // If Range: header specified, act accordingly
   r1 = r2 = 0;
-  hdr = mg_get_header(conn, "Range");
+  hdr = vz_get_header(conn, "Range");
   if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0) {
     conn->request_info.status_code = 206;
     (void) fseeko(fp, (off_t) r1, SEEK_SET);
     cl = n == 2 ? r2 - r1 + 1: cl - r1;
-    (void) mg_snprintf(conn, range, sizeof(range),
+    (void) vz_snprintf(conn, range, sizeof(range),
         "Content-Range: bytes "
         "%" INT64_FMT "-%"
         INT64_FMT "/%" INT64_FMT "\r\n",
@@ -2021,10 +2021,10 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   // http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3
   gmt_time_string(date, sizeof(date), &curtime);
   gmt_time_string(lm, sizeof(lm), &stp->mtime);
-  (void) mg_snprintf(conn, etag, sizeof(etag), "%lx.%lx",
+  (void) vz_snprintf(conn, etag, sizeof(etag), "%lx.%lx",
       (unsigned long) stp->mtime, (unsigned long) stp->size);
 
-  (void) mg_printf(conn,
+  (void) vz_printf(conn,
       "HTTP/1.1 %d %s\r\n"
       "Date: %s\r\n"
       "Last-Modified: %s\r\n"
@@ -2043,9 +2043,9 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   (void) fclose(fp);
 }
 
-void mg_send_file(struct mg_connection *conn, const char *path) {
+void vz_send_file(struct vz_connection *conn, const char *path) {
   struct mgstat st;
-  if (mg_stat(path, &st) == 0) {
+  if (vz_stat(path, &st) == 0) {
     handle_file_request(conn, path, &st);
   } else {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
@@ -2055,7 +2055,7 @@ void mg_send_file(struct mg_connection *conn, const char *path) {
 
 // Parse HTTP headers from the given buffer, advance buffer to the point
 // where parsing stopped.
-static void parse_http_headers(char **buf, struct mg_request_info *ri) {
+static void parse_http_headers(char **buf, struct vz_request_info *ri) {
   int i;
 
   for (i = 0; i < (int) ARRAY_SIZE(ri->http_headers); i++) {
@@ -2074,8 +2074,8 @@ static int is_valid_http_method(const char *method) {
     !strcmp(method, "OPTIONS") || !strcmp(method, "PROPFIND");
 }
 
-// Parse HTTP request, fill in mg_request_info structure.
-static int parse_http_request(char *buf, struct mg_request_info *ri) {
+// Parse HTTP request, fill in vz_request_info structure.
+static int parse_http_request(char *buf, struct vz_request_info *ri) {
   int status = 0;
 
   // RFC says that all initial whitespaces should be ingored
@@ -2123,7 +2123,7 @@ static int read_request(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int bufsiz,
 // For given directory path, substitute it to valid index file.
 // Return 0 if index file has been found, -1 if not found.
 // If the file is found, it's stats is returned in stp.
-static int substitute_index_file(struct mg_connection *conn, char *path,
+static int substitute_index_file(struct vz_connection *conn, char *path,
                                  size_t path_len, struct mgstat *stp) {
   const char *list = conn->ctx->config[INDEX_FILES];
   struct mgstat st;
@@ -2148,10 +2148,10 @@ static int substitute_index_file(struct mg_connection *conn, char *path,
       continue;
 
     // Prepare full path to the index file
-    (void) mg_strlcpy(path + n + 1, filename_vec.ptr, filename_vec.len + 1);
+    (void) vz_strlcpy(path + n + 1, filename_vec.ptr, filename_vec.len + 1);
 
     // Does it exist?
-    if (mg_stat(path, &st) == 0) {
+    if (vz_stat(path, &st) == 0) {
       // Yes it does, break the loop
       *stp = st;
       found = 1;
@@ -2168,28 +2168,28 @@ static int substitute_index_file(struct mg_connection *conn, char *path,
 }
 
 // Return True if we should reply 304 Not Modified.
-static int is_not_modified(const struct mg_connection *conn,
+static int is_not_modified(const struct vz_connection *conn,
                            const struct mgstat *stp) {
-  const char *ims = mg_get_header(conn, "If-Modified-Since");
+  const char *ims = vz_get_header(conn, "If-Modified-Since");
   return ims != NULL && stp->mtime <= parse_date_string(ims);
 }
 
-static int forward_body_data(struct mg_connection *conn, FILE *fp,
+static int forward_body_data(struct vz_connection *conn, FILE *fp,
                              SOCKET sock, SSL *ssl) {
   const char *expect, *buffered;
   char buf[BUFSIZ];
   int to_read, nread, buffered_len, success = 0;
 
-  expect = mg_get_header(conn, "Expect");
+  expect = vz_get_header(conn, "Expect");
   assert(fp != NULL);
 
   if (conn->content_len == -1) {
     send_http_error(conn, 411, "Length Required", "");
-  } else if (expect != NULL && mg_strcasecmp(expect, "100-continue")) {
+  } else if (expect != NULL && vz_strcasecmp(expect, "100-continue")) {
     send_http_error(conn, 417, "Expectation Failed", "");
   } else {
     if (expect != NULL) {
-      (void) mg_printf(conn, "%s", "HTTP/1.1 100 Continue\r\n\r\n");
+      (void) vz_printf(conn, "%s", "HTTP/1.1 100 Continue\r\n\r\n");
     }
 
     buffered = conn->buf + conn->request_len;
@@ -2240,7 +2240,7 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
 // We satisfy both worlds: we create an envp array (which is vars), all
 // entries are actually pointers inside buf.
 struct cgi_env_block {
-  struct mg_connection *conn;
+  struct vz_connection *conn;
   char buf[CGI_ENVIRONMENT_SIZE]; // Environment buffer
   int len; // Space taken
   char *vars[MAX_CGI_ENVIR_VARS]; // char **envp
@@ -2263,7 +2263,7 @@ static char *addenv(struct cgi_env_block *block, const char *fmt, ...) {
 
   // Copy VARIABLE=VALUE\0 string into the free space
   va_start(ap, fmt);
-  n = mg_vsnprintf(block->conn, added, (size_t) space, fmt, ap);
+  n = vz_vsnprintf(block->conn, added, (size_t) space, fmt, ap);
   va_end(ap);
 
   // Make sure we do not overflow buffer and the envp array
@@ -2278,7 +2278,7 @@ static char *addenv(struct cgi_env_block *block, const char *fmt, ...) {
   return added;
 }
 
-static void prepare_cgi_environment(struct mg_connection *conn,
+static void prepare_cgi_environment(struct vz_connection *conn,
                                     const char *prog,
                                     struct cgi_env_block *blk) {
   const char *s, *slash;
@@ -2319,13 +2319,13 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   addenv(blk, "PATH_TRANSLATED=%s", prog);
   addenv(blk, "HTTPS=%s", conn->ssl == NULL ? "off" : "on");
 
-  if ((s = mg_get_header(conn, "Content-Type")) != NULL)
+  if ((s = vz_get_header(conn, "Content-Type")) != NULL)
     addenv(blk, "CONTENT_TYPE=%s", s);
 
   if (conn->request_info.query_string != NULL)
     addenv(blk, "QUERY_STRING=%s", conn->request_info.query_string);
 
-  if ((s = mg_get_header(conn, "Content-Length")) != NULL)
+  if ((s = vz_get_header(conn, "Content-Length")) != NULL)
     addenv(blk, "CONTENT_LENGTH=%s", s);
 
   if ((s = getenv("PATH")) != NULL)
@@ -2374,11 +2374,11 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   assert(blk->len < (int) sizeof(blk->buf));
 }
 
-static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
+static void handle_cgi_request(struct vz_connection *conn, const char *prog) {
   int headers_len, data_len, i, fd_stdin[2], fd_stdout[2];
   const char *status, *status_text;
   char buf[BUFSIZ], *pbuf, dir[PATH_MAX], *p;
-  struct mg_request_info ri;
+  struct vz_request_info ri;
   struct cgi_env_block blk;
   FILE *in, *out;
   pid_t pid;
@@ -2388,7 +2388,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   // CGI must be executed in its own directory. 'dir' must point to the
   // directory containing executable program, 'p' must point to the
   // executable program name relative to 'dir'.
-  (void) mg_snprintf(conn, dir, sizeof(dir), "%s", prog);
+  (void) vz_snprintf(conn, dir, sizeof(dir), "%s", prog);
   if ((p = strrchr(dir, DIRSEP)) != NULL) {
     *p++ = '\0';
   } else {
@@ -2460,21 +2460,21 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
     conn->request_info.status_code = 200;
   }
   if (get_header(&ri, "Connection") != NULL &&
-      !mg_strcasecmp(get_header(&ri, "Connection"), "keep-alive")) {
+      !vz_strcasecmp(get_header(&ri, "Connection"), "keep-alive")) {
     conn->must_close = 1;
   }
-  (void) mg_printf(conn, "HTTP/1.1 %d %s\r\n", conn->request_info.status_code,
+  (void) vz_printf(conn, "HTTP/1.1 %d %s\r\n", conn->request_info.status_code,
                    status_text);
 
   // Send headers
   for (i = 0; i < ri.num_headers; i++) {
-    mg_printf(conn, "%s: %s\r\n",
+    vz_printf(conn, "%s: %s\r\n",
               ri.http_headers[i].name, ri.http_headers[i].value);
   }
-  (void) mg_write(conn, "\r\n", 2);
+  (void) vz_write(conn, "\r\n", 2);
 
   // Send chunk of data that may be read after the headers
-  conn->num_bytes_sent += mg_write(conn, buf + headers_len,
+  conn->num_bytes_sent += vz_write(conn, buf + headers_len,
                                    (size_t)(data_len - headers_len));
 
   // Read the rest of CGI output and send to the client
@@ -2525,7 +2525,7 @@ static int put_dir(const char *path) {
 
     // Try to create intermediate directory
     DEBUG_TRACE(("mkdir(%s)", buf));
-    if (mg_stat(buf, &st) == -1 && mg_mkdir(buf, 0755) != 0) {
+    if (vz_stat(buf, &st) == -1 && vz_mkdir(buf, 0755) != 0) {
       res = -1;
       break;
     }
@@ -2539,26 +2539,26 @@ static int put_dir(const char *path) {
   return res;
 }
 
-static void put_file(struct mg_connection *conn, const char *path) {
+static void put_file(struct vz_connection *conn, const char *path) {
   struct mgstat st;
   const char *range;
   int64_t r1, r2;
   FILE *fp;
   int rc;
 
-  conn->request_info.status_code = mg_stat(path, &st) == 0 ? 200 : 201;
+  conn->request_info.status_code = vz_stat(path, &st) == 0 ? 200 : 201;
 
   if ((rc = put_dir(path)) == 0) {
-    mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->request_info.status_code);
+    vz_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->request_info.status_code);
   } else if (rc == -1) {
     send_http_error(conn, 500, http_500_error,
         "put_dir(%s): %s", path, strerror(ERRNO));
-  } else if ((fp = mg_fopen(path, "wb+")) == NULL) {
+  } else if ((fp = vz_fopen(path, "wb+")) == NULL) {
     send_http_error(conn, 500, http_500_error,
         "fopen(%s): %s", path, strerror(ERRNO));
   } else {
     set_close_on_exec(fileno(fp));
-    range = mg_get_header(conn, "Content-Range");
+    range = vz_get_header(conn, "Content-Range");
     r1 = r2 = 0;
     if (range != NULL && parse_range_header(range, &r1, &r2) > 0) {
       conn->request_info.status_code = 206;
@@ -2566,15 +2566,15 @@ static void put_file(struct mg_connection *conn, const char *path) {
       (void) fseeko(fp, (off_t) r1, SEEK_SET);
     }
     if (forward_body_data(conn, fp, INVALID_SOCKET, NULL))
-      (void) mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n",
+      (void) vz_printf(conn, "HTTP/1.1 %d OK\r\n\r\n",
           conn->request_info.status_code);
     (void) fclose(fp);
   }
 }
 
-static void send_ssi_file(struct mg_connection *, const char *, FILE *, int);
+static void send_ssi_file(struct vz_connection *, const char *, FILE *, int);
 
-static void do_ssi_include(struct mg_connection *conn, const char *ssi,
+static void do_ssi_include(struct vz_connection *conn, const char *ssi,
                            char *tag, int include_level) {
   char file_name[BUFSIZ], path[PATH_MAX], *p;
   FILE *fp;
@@ -2583,26 +2583,26 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
   // of size BUFSIZ to get the tag. So strlen(tag) is always < BUFSIZ.
   if (sscanf(tag, " virtual=\"%[^\"]\"", file_name) == 1) {
     // File name is relative to the webserver root
-    (void) mg_snprintf(conn, path, sizeof(path), "%s%c%s",
+    (void) vz_snprintf(conn, path, sizeof(path), "%s%c%s",
         conn->ctx->config[DOCUMENT_ROOT], DIRSEP, file_name);
   } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1) {
     // File name is relative to the webserver working directory
     // or it is absolute system path
-    (void) mg_snprintf(conn, path, sizeof(path), "%s", file_name);
+    (void) vz_snprintf(conn, path, sizeof(path), "%s", file_name);
   } else if (sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
     // File name is relative to the currect document
-    (void) mg_snprintf(conn, path, sizeof(path), "%s", ssi);
+    (void) vz_snprintf(conn, path, sizeof(path), "%s", ssi);
     if ((p = strrchr(path, DIRSEP)) != NULL) {
       p[1] = '\0';
     }
-    (void) mg_snprintf(conn, path + strlen(path),
+    (void) vz_snprintf(conn, path + strlen(path),
         sizeof(path) - strlen(path), "%s", file_name);
   } else {
     cry(conn, "Bad SSI #include: [%s]", tag);
     return;
   }
 
-  if ((fp = mg_fopen(path, "rb")) == NULL) {
+  if ((fp = vz_fopen(path, "rb")) == NULL) {
     cry(conn, "Cannot open SSI #include: [%s]: fopen(%s): %s",
         tag, path, strerror(ERRNO));
   } else {
@@ -2618,7 +2618,7 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
 }
 
 #if !defined(NO_POPEN)
-static void do_ssi_exec(struct mg_connection *conn, char *tag) {
+static void do_ssi_exec(struct vz_connection *conn, char *tag) {
   char cmd[BUFSIZ];
   FILE *fp;
 
@@ -2633,7 +2633,7 @@ static void do_ssi_exec(struct mg_connection *conn, char *tag) {
 }
 #endif // !NO_POPEN
 
-static void send_ssi_file(struct mg_connection *conn, const char *path,
+static void send_ssi_file(struct vz_connection *conn, const char *path,
                           FILE *fp, int include_level) {
   char buf[BUFSIZ];
   int ch, len, in_ssi_tag;
@@ -2654,7 +2654,7 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
       assert(len <= (int) sizeof(buf));
       if (len < 6 || memcmp(buf, "<!--#", 5) != 0) {
         // Not an SSI tag, pass it
-        (void) mg_write(conn, buf, (size_t)len);
+        (void) vz_write(conn, buf, (size_t)len);
       } else {
         if (!memcmp(buf + 5, "include", 7)) {
           do_ssi_include(conn, path, buf + 12, include_level);
@@ -2679,14 +2679,14 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
     } else if (ch == '<') {
       in_ssi_tag = 1;
       if (len > 0) {
-        (void) mg_write(conn, buf, (size_t)len);
+        (void) vz_write(conn, buf, (size_t)len);
       }
       len = 0;
       buf[len++] = ch & 0xff;
     } else {
       buf[len++] = ch & 0xff;
       if (len == (int) sizeof(buf)) {
-        (void) mg_write(conn, buf, (size_t)len);
+        (void) vz_write(conn, buf, (size_t)len);
         len = 0;
       }
     }
@@ -2694,21 +2694,21 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
 
   // Send the rest of buffered data
   if (len > 0) {
-    (void) mg_write(conn, buf, (size_t)len);
+    (void) vz_write(conn, buf, (size_t)len);
   }
 }
 
-static void handle_ssi_file_request(struct mg_connection *conn,
+static void handle_ssi_file_request(struct vz_connection *conn,
                                     const char *path) {
   FILE *fp;
 
-  if ((fp = mg_fopen(path, "rb")) == NULL) {
+  if ((fp = vz_fopen(path, "rb")) == NULL) {
     send_http_error(conn, 500, http_500_error, "fopen(%s): %s", path,
                     strerror(ERRNO));
   } else {
     conn->must_close = 1;
     set_close_on_exec(fileno(fp));
-    mg_printf(conn, "HTTP/1.1 200 OK\r\n"
+    vz_printf(conn, "HTTP/1.1 200 OK\r\n"
               "Content-Type: text/html\r\nConnection: %s\r\n\r\n",
               suggest_connection_header(conn));
     send_ssi_file(conn, path, fp, 0);
@@ -2716,21 +2716,21 @@ static void handle_ssi_file_request(struct mg_connection *conn,
   }
 }
 
-static void send_options(struct mg_connection *conn) {
+static void send_options(struct vz_connection *conn) {
   conn->request_info.status_code = 200;
 
-  (void) mg_printf(conn,
+  (void) vz_printf(conn,
       "HTTP/1.1 200 OK\r\n"
       "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS\r\n"
       "DAV: 1\r\n\r\n");
 }
 
 // Writes PROPFIND properties for a collection element
-static void print_props(struct mg_connection *conn, const char* uri,
+static void print_props(struct vz_connection *conn, const char* uri,
                         struct mgstat* st) {
   char mtime[64];
   gmt_time_string(mtime, sizeof(mtime), &st->mtime);
-  conn->num_bytes_sent += mg_printf(conn,
+  conn->num_bytes_sent += vz_printf(conn,
       "<d:response>"
        "<d:href>%s</d:href>"
        "<d:propstat>"
@@ -2750,23 +2750,23 @@ static void print_props(struct mg_connection *conn, const char* uri,
 
 static void print_dav_dir_entry(struct de *de, void *data) {
   char href[PATH_MAX];
-  struct mg_connection *conn = (struct mg_connection *) data;
-  mg_snprintf(conn, href, sizeof(href), "%s%s",
+  struct vz_connection *conn = (struct vz_connection *) data;
+  vz_snprintf(conn, href, sizeof(href), "%s%s",
               conn->request_info.uri, de->file_name);
   print_props(conn, href, &de->st);
 }
 
-static void handle_propfind(struct mg_connection *conn, const char* path,
+static void handle_propfind(struct vz_connection *conn, const char* path,
                             struct mgstat* st) {
-  const char *depth = mg_get_header(conn, "Depth");
+  const char *depth = vz_get_header(conn, "Depth");
 
   conn->must_close = 1;
   conn->request_info.status_code = 207;
-  mg_printf(conn, "HTTP/1.1 207 Multi-Status\r\n"
+  vz_printf(conn, "HTTP/1.1 207 Multi-Status\r\n"
             "Connection: close\r\n"
             "Content-Type: text/xml; charset=utf-8\r\n\r\n");
 
-  conn->num_bytes_sent += mg_printf(conn,
+  conn->num_bytes_sent += vz_printf(conn,
       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
       "<d:multistatus xmlns:d='DAV:'>\n");
 
@@ -2775,20 +2775,20 @@ static void handle_propfind(struct mg_connection *conn, const char* path,
 
   // If it is a directory, print directory entries too if Depth is not 0
   if (st->is_directory &&
-      !mg_strcasecmp(conn->ctx->config[ENABLE_DIRECTORY_LISTING], "yes") &&
+      !vz_strcasecmp(conn->ctx->config[ENABLE_DIRECTORY_LISTING], "yes") &&
       (depth == NULL || strcmp(depth, "0") != 0)) {
     scan_directory(conn, path, conn, &print_dav_dir_entry);
   }
 
-  conn->num_bytes_sent += mg_printf(conn, "%s\n", "</d:multistatus>");
+  conn->num_bytes_sent += vz_printf(conn, "%s\n", "</d:multistatus>");
 }
 
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
 // and Mongoose must decide what action to take: serve a file, or
 // a directory, or call embedded function, etcetera.
-static void handle_request(struct mg_connection *conn) {
-  struct mg_request_info *ri = &conn->request_info;
+static void handle_request(struct vz_connection *conn) {
+  struct vz_request_info *ri = &conn->request_info;
   char path[PATH_MAX];
   int stat_result, uri_len;
   struct mgstat st;
@@ -2821,7 +2821,7 @@ static void handle_request(struct mg_connection *conn) {
   } else if (!strcmp(ri->request_method, "PUT")) {
     put_file(conn, path);
   } else if (!strcmp(ri->request_method, "DELETE")) {
-    if (mg_remove(path) == 0) {
+    if (vz_remove(path) == 0) {
       send_http_error(conn, 200, "OK", "");
     } else {
       send_http_error(conn, 500, http_500_error, "remove(%s): %s", path,
@@ -2830,14 +2830,14 @@ static void handle_request(struct mg_connection *conn) {
   } else if (stat_result != 0) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
   } else if (st.is_directory && ri->uri[uri_len - 1] != '/') {
-    (void) mg_printf(conn,
+    (void) vz_printf(conn,
         "HTTP/1.1 301 Moved Permanently\r\n"
         "Location: %s/\r\n\r\n", ri->uri);
   } else if (!strcmp(ri->request_method, "PROPFIND")) {
     handle_propfind(conn, path, &st);
   } else if (st.is_directory &&
              !substitute_index_file(conn, path, sizeof(path), &st)) {
-    if (!mg_strcasecmp(conn->ctx->config[ENABLE_DIRECTORY_LISTING], "yes")) {
+    if (!vz_strcasecmp(conn->ctx->config[ENABLE_DIRECTORY_LISTING], "yes")) {
       handle_directory_request(conn, path);
     } else {
       send_http_error(conn, 403, "Directory Listing Denied",
@@ -2866,7 +2866,7 @@ static void handle_request(struct mg_connection *conn) {
   }
 }
 
-static void close_all_listening_sockets(struct mg_context *ctx) {
+static void close_all_listening_sockets(struct vz_context *ctx) {
   struct socket *sp, *tmp;
   for (sp = ctx->listening_sockets; sp != NULL; sp = tmp) {
     tmp = sp->next;
@@ -2908,7 +2908,7 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
   return 1;
 }
 
-static int set_ports_option(struct mg_context *ctx) {
+static int set_ports_option(struct vz_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
   int on = 1, success = 1;
   SOCKET sock;
@@ -2965,24 +2965,24 @@ static int set_ports_option(struct mg_context *ctx) {
   return success;
 }
 
-static void log_header(const struct mg_connection *conn, const char *header,
+static void log_header(const struct vz_connection *conn, const char *header,
                        FILE *fp) {
   const char *header_value;
 
-  if ((header_value = mg_get_header(conn, header)) == NULL) {
+  if ((header_value = vz_get_header(conn, header)) == NULL) {
     (void) fprintf(fp, "%s", " -");
   } else {
     (void) fprintf(fp, " \"%s\"", header_value);
   }
 }
 
-static void log_access(const struct mg_connection *conn) {
-  const struct mg_request_info *ri;
+static void log_access(const struct vz_connection *conn) {
+  const struct vz_request_info *ri;
   FILE *fp;
   char date[64], src_addr[20];
 
   fp = conn->ctx->config[ACCESS_LOG_FILE] == NULL ?  NULL :
-    mg_fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
+    vz_fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
 
   if (fp == NULL)
     return;
@@ -3014,7 +3014,7 @@ static int isbyte(int n) {
 
 // Verify given socket address against the ACL.
 // Return -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed.
-static int check_acl(struct mg_context *ctx, const union usa *usa) {
+static int check_acl(struct vz_context *ctx, const union usa *usa) {
   int a, b, c, d, n, mask, allowed;
   char flag;
   uint32_t acl_subnet, acl_mask, remote_ip;
@@ -3067,7 +3067,7 @@ static void add_to_set(SOCKET fd, fd_set *set, int *max_fd) {
   }
 }
 
-static int set_uid_option(struct mg_context *ctx) {
+static int set_uid_option(struct vz_context *ctx) {
   struct passwd *pw;
   const char *uid = ctx->config[RUN_AS_USER];
   int success = 0;
@@ -3109,7 +3109,7 @@ static unsigned long ssl_id_callback(void) {
 }
 
 #if !defined(NO_SSL_DL)
-static int load_dll(struct mg_context *ctx, const char *dll_name,
+static int load_dll(struct vz_context *ctx, const char *dll_name,
                     struct ssl_func *sw) {
   union {void *p; void (*fp)(void);} u;
   void  *dll_handle;
@@ -3137,8 +3137,8 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 #endif // NO_SSL_DL
 
 // Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
-static int set_ssl_option(struct mg_context *ctx) {
-  struct mg_request_info request_info;
+static int set_ssl_option(struct vz_context *ctx) {
+  struct vz_request_info request_info;
   SSL_CTX *CTX;
   int i, size;
   const char *pem = ctx->config[SSL_CERTIFICATE];
@@ -3164,7 +3164,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   } else if (ctx->user_callback != NULL) {
     memset(&request_info, 0, sizeof(request_info));
     request_info.user_data = ctx->user_data;
-    ctx->user_callback(MG_INIT_SSL, (struct mg_connection *) CTX,
+    ctx->user_callback(MG_INIT_SSL, (struct vz_connection *) CTX,
                        &request_info);
   }
 
@@ -3205,7 +3205,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   return 1;
 }
 
-static void uninitialize_ssl(struct mg_context *ctx) {
+static void uninitialize_ssl(struct vz_context *ctx) {
   int i;
   if (ctx->ssl_ctx != NULL) {
     CRYPTO_set_locking_callback(NULL);
@@ -3218,19 +3218,19 @@ static void uninitialize_ssl(struct mg_context *ctx) {
 }
 #endif // !NO_SSL
 
-static int set_gpass_option(struct mg_context *ctx) {
+static int set_gpass_option(struct vz_context *ctx) {
   struct mgstat mgstat;
   const char *path = ctx->config[GLOBAL_PASSWORDS_FILE];
-  return path == NULL || mg_stat(path, &mgstat) == 0;
+  return path == NULL || vz_stat(path, &mgstat) == 0;
 }
 
-static int set_acl_option(struct mg_context *ctx) {
+static int set_acl_option(struct vz_context *ctx) {
   union usa fake;
   return check_acl(ctx, &fake) != -1;
 }
 
-static void reset_per_request_attributes(struct mg_connection *conn) {
-  struct mg_request_info *ri = &conn->request_info;
+static void reset_per_request_attributes(struct vz_connection *conn) {
+  struct vz_request_info *ri = &conn->request_info;
 
   // Reset request info attributes. DO NOT TOUCH is_ssl, remote_ip, remote_port
   ri->remote_user = ri->request_method = ri->uri = ri->http_version =
@@ -3272,7 +3272,7 @@ static void close_socket_gracefully(SOCKET sock) {
   (void) closesocket(sock);
 }
 
-static void close_connection(struct mg_connection *conn) {
+static void close_connection(struct vz_connection *conn) {
   if (conn->ssl) {
     SSL_free(conn->ssl);
     conn->ssl = NULL;
@@ -3283,7 +3283,7 @@ static void close_connection(struct mg_connection *conn) {
   }
 }
 
-static void discard_current_request_from_buffer(struct mg_connection *conn) {
+static void discard_current_request_from_buffer(struct vz_connection *conn) {
   char *buffered;
   int buffered_len, body_len;
 
@@ -3310,8 +3310,8 @@ static int is_valid_uri(const char *uri) {
   return uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0');
 }
 
-static void process_new_connection(struct mg_connection *conn) {
-  struct mg_request_info *ri = &conn->request_info;
+static void process_new_connection(struct vz_connection *conn) {
+  struct vz_request_info *ri = &conn->request_info;
   int keep_alive_enabled;
   const char *cl;
 
@@ -3363,7 +3363,7 @@ static void process_new_connection(struct mg_connection *conn) {
 }
 
 // Worker threads take accepted socket from the queue
-static int consume_socket(struct mg_context *ctx, struct socket *sp) {
+static int consume_socket(struct vz_context *ctx, struct socket *sp) {
   (void) pthread_mutex_lock(&ctx->mutex);
   DEBUG_TRACE(("going idle"));
 
@@ -3392,11 +3392,11 @@ static int consume_socket(struct mg_context *ctx, struct socket *sp) {
   return !ctx->stop_flag;
 }
 
-static void worker_thread(struct mg_context *ctx) {
-  struct mg_connection *conn;
+static void worker_thread(struct vz_context *ctx) {
+  struct vz_connection *conn;
   int buf_size = atoi(ctx->config[MAX_REQUEST_SIZE]);
 
-  conn = (struct mg_connection *) calloc(1, sizeof(*conn) + buf_size);
+  conn = (struct vz_connection *) calloc(1, sizeof(*conn) + buf_size);
   if (conn == NULL) {
     cry(fc(ctx), "%s", "Cannot create new connection struct, OOM");
     return;
@@ -3440,7 +3440,7 @@ static void worker_thread(struct mg_context *ctx) {
 }
 
 // Master thread adds accepted socket to a queue
-static void produce_socket(struct mg_context *ctx, const struct socket *sp) {
+static void produce_socket(struct vz_context *ctx, const struct socket *sp) {
   (void) pthread_mutex_lock(&ctx->mutex);
 
   // If the queue is full, wait
@@ -3461,7 +3461,7 @@ static void produce_socket(struct mg_context *ctx, const struct socket *sp) {
 }
 
 static void accept_new_connection(const struct socket *listener,
-                                  struct mg_context *ctx) {
+                                  struct vz_context *ctx) {
   struct socket accepted;
   char src_addr[20];
   socklen_t len;
@@ -3485,7 +3485,7 @@ static void accept_new_connection(const struct socket *listener,
   }
 }
 
-static void master_thread(struct mg_context *ctx) {
+static void master_thread(struct vz_context *ctx) {
   fd_set read_set;
   struct timeval tv;
   struct socket *sp;
@@ -3522,7 +3522,7 @@ static void master_thread(struct mg_context *ctx) {
   }
   DEBUG_TRACE(("stopping workers"));
 
-  // Stop signal received: somebody called mg_stop. Quit.
+  // Stop signal received: somebody called vz_stop. Quit.
   close_all_listening_sockets(ctx);
 
   // Wakeup workers that are waiting for connections to handle.
@@ -3545,13 +3545,13 @@ static void master_thread(struct mg_context *ctx) {
   uninitialize_ssl(ctx);
 #endif
 
-  // Signal mg_stop() that we're done
+  // Signal vz_stop() that we're done
   ctx->stop_flag = 2;
 
   DEBUG_TRACE(("exiting"));
 }
 
-static void free_context(struct mg_context *ctx) {
+static void free_context(struct vz_context *ctx) {
   int i;
 
   // Deallocate config parameters
@@ -3574,10 +3574,10 @@ static void free_context(struct mg_context *ctx) {
   free(ctx);
 }
 
-void mg_stop(struct mg_context *ctx) {
+void vz_stop(struct vz_context *ctx) {
   ctx->stop_flag = 1;
 
-  // Wait until mg_fini() stops
+  // Wait until vz_fini() stops
   while (ctx->stop_flag != 2) {
     (void) sleep(0);
   }
@@ -3585,16 +3585,16 @@ void mg_stop(struct mg_context *ctx) {
 
 }
 
-struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
+struct vz_context *vz_start(vz_callback_t user_callback, void *user_data,
                             const char **options) {
-  struct mg_context *ctx;
+  struct vz_context *ctx;
   const char *name, *value, *default_value;
   int i;
 
 
   // Allocate context and initialize reasonable general case defaults.
   // TODO(lsm): do proper error handling here.
-  ctx = (struct mg_context *) calloc(1, sizeof(*ctx));
+  ctx = (struct vz_context *) calloc(1, sizeof(*ctx));
   ctx->user_callback = user_callback;
   ctx->user_data = user_data;
 
@@ -3611,7 +3611,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
     if (ctx->config[i] != NULL) {
       cry(fc(ctx), "%s: duplicate option", name);
     }
-    ctx->config[i] = mg_strdup(value);
+    ctx->config[i] = vz_strdup(value);
     DEBUG_TRACE(("[%s] -> [%s]", name, value));
   }
 
@@ -3619,7 +3619,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   for (i = 0; config_options[i * ENTRIES_PER_CONFIG_OPTION] != NULL; i++) {
     default_value = config_options[i * ENTRIES_PER_CONFIG_OPTION + 2];
     if (ctx->config[i] == NULL && default_value != NULL) {
-      ctx->config[i] = mg_strdup(default_value);
+      ctx->config[i] = vz_strdup(default_value);
       DEBUG_TRACE(("Setting default: [%s] -> [%s]",
                    config_options[i * ENTRIES_PER_CONFIG_OPTION + 1],
                    default_value));
@@ -3651,11 +3651,11 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   (void) pthread_cond_init(&ctx->sq_full, NULL);
 
   // Start master (listening) thread
-  start_thread(ctx, (mg_thread_func_t) master_thread, ctx);
+  start_thread(ctx, (vz_thread_func_t) master_thread, ctx);
 
   // Start worker threads
   for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
-    if (start_thread(ctx, (mg_thread_func_t) worker_thread, ctx) != 0) {
+    if (start_thread(ctx, (vz_thread_func_t) worker_thread, ctx) != 0) {
       cry(fc(ctx), "Cannot start worker thread: %d", ERRNO);
     } else {
       ctx->num_threads++;

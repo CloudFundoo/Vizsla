@@ -24,7 +24,7 @@
 static int exit_flag;
 static char server_name[40];        // Set by init_server_name()
 static char config_file[PATH_MAX];  // Set by process_command_line_arguments()
-static struct mg_context *ctx;      // Set by start_vizsla()
+static struct vz_context *ctx;      // Set by start_vizsla()
 
 #if !defined(CONFIG_FILE)
 #define CONFIG_FILE "vizsla.conf"
@@ -51,14 +51,14 @@ static void show_usage_and_exit(void) {
   const char **names;
   int i;
 
-  fprintf(stderr, "Vizsla version %s (c) CloudFundoo\n", mg_version());
+  fprintf(stderr, "Vizsla version %s (c) CloudFundoo\n", vz_version());
   fprintf(stderr, "Usage:\n");
   fprintf(stderr, "  vizsla -A <htpasswd_file> <realm> <user> <passwd>\n");
   fprintf(stderr, "  vizsla <config_file>\n");
   fprintf(stderr, "  vizsla [-option value ...]\n");
   fprintf(stderr, "OPTIONS:\n");
 
-  names = mg_get_valid_option_names();
+  names = vz_get_valid_option_names();
   for (i = 0; names[i] != NULL; i += 3) {
     fprintf(stderr, "  -%s %s (default: \"%s\")\n",
             names[i], names[i + 1], names[i + 2] == NULL ? "" : names[i + 2]);
@@ -172,7 +172,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
 static void init_server_name(void) {
   snprintf(server_name, sizeof(server_name), "Mongoose web server v. %s",
-           mg_version());
+           vz_version());
 }
 
 static void start_vizsla(int argc, char *argv[]) {
@@ -184,7 +184,7 @@ static void start_vizsla(int argc, char *argv[]) {
     if (argc != 6) {
       show_usage_and_exit();
     }
-    exit(mg_modify_passwords_file(argv[2], argv[3], argv[4], argv[5]) ?
+    exit(vz_modify_passwords_file(argv[2], argv[3], argv[4], argv[5]) ?
          EXIT_SUCCESS : EXIT_FAILURE);
   }
 
@@ -201,7 +201,7 @@ static void start_vizsla(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
 
   /* Start Mongoose */
-  ctx = mg_start(NULL, NULL, (const char **) options);
+  ctx = vz_start(NULL, NULL, (const char **) options);
   for (i = 0; options[i] != NULL; i++) {
     free(options[i]);
   }
@@ -217,15 +217,15 @@ int main(int argc, char *argv[]) {
   init_server_name();
   start_vizsla(argc, argv);
   printf("%s started on port(s) %s with web root [%s]\n",
-         server_name, mg_get_option(ctx, "listening_ports"),
-         mg_get_option(ctx, "document_root"));
+         server_name, vz_get_option(ctx, "listening_ports"),
+         vz_get_option(ctx, "document_root"));
   while (exit_flag == 0) {
     sleep(1);
   }
   printf("Exiting on signal %d, waiting for all threads to finish...",
          exit_flag);
   fflush(stdout);
-  mg_stop(ctx);
+  vz_stop(ctx);
   printf("%s", " done.\n");
 
   return EXIT_SUCCESS;
