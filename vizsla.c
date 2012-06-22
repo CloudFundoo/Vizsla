@@ -66,7 +66,7 @@ typedef int SOCKET;
 
 #include "vizsla.h"
 
-#define MONGOOSE_VERSION "3.1"
+#define VIZSLA_VERSION "0.1"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
@@ -288,7 +288,7 @@ static const char *config_options[] = {
 struct vz_context {
   volatile int stop_flag;       // Should we stop event loop
   SSL_CTX *ssl_ctx;             // SSL context
-  char *config[NUM_OPTIONS];    // Mongoose configuration parameters
+  char *config[NUM_OPTIONS];    // Vizsla configuration parameters
   vz_callback_t user_callback;  // User-defined callback function
   void *user_data;              // User-defined data
 
@@ -426,7 +426,7 @@ static struct vz_connection *fc(struct vz_context *ctx) {
 }
 
 const char *vz_version(void) {
-  return MONGOOSE_VERSION;
+  return VIZSLA_VERSION;
 }
 
 static void vz_strlcpy(register char *dst, register const char *src, size_t n) {
@@ -2783,9 +2783,9 @@ static void handle_propfind(struct vz_connection *conn, const char* path,
   conn->num_bytes_sent += vz_printf(conn, "%s\n", "</d:multistatus>");
 }
 
-// This is the heart of the Mongoose's logic.
+// This is the heart of the Vizsla's logic.
 // This function is called when the request is read, parsed and validated,
-// and Mongoose must decide what action to take: serve a file, or
+// and Vizsla must decide what action to take: serve a file, or
 // a directory, or call embedded function, etcetera.
 static void handle_request(struct vz_connection *conn) {
   struct vz_request_info *ri = &conn->request_info;

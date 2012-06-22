@@ -171,7 +171,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 }
 
 static void init_server_name(void) {
-  snprintf(server_name, sizeof(server_name), "Mongoose web server v. %s",
+  snprintf(server_name, sizeof(server_name), "Vizsla web server v. %s",
            vz_version());
 }
 
@@ -200,14 +200,14 @@ static void start_vizsla(int argc, char *argv[]) {
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
 
-  /* Start Mongoose */
+  /* Start Vizsla */
   ctx = vz_start(NULL, NULL, (const char **) options);
   for (i = 0; options[i] != NULL; i++) {
     free(options[i]);
   }
 
   if (ctx == NULL) {
-    die("%s", "Failed to start Mongoose. Maybe some options are "
+    die("%s", "Failed to start Vizsla. Maybe some options are "
         "assigned bad values?\nTry to run with '-e error_log.txt' "
         "and check error_log.txt for more information.");
   }

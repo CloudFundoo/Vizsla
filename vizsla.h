@@ -1,7 +1,7 @@
 /** Initial work is from mongoose project **/
 
-#ifndef MONGOOSE_HEADER_INCLUDED
-#define  MONGOOSE_HEADER_INCLUDED
+#ifndef VIZSLA_HEADER_INCLUDED
+#define  VIZSLA_HEADER_INCLUDED
 
 #include <stddef.h>
 
@@ -21,7 +21,7 @@ struct vz_request_info {
   char *http_version;    // E.g. "1.0", "1.1"
   char *query_string;    // URL part after '?' (not including '?') or NULL
   char *remote_user;     // Authenticated user, or NULL if no auth used
-  char *log_message;     // Mongoose error log message, MG_EVENT_LOG only
+  char *log_message;     // Vizsla error log message, MG_EVENT_LOG only
   long remote_ip;        // Client's IP address
   int remote_port;       // Client's port
   int status_code;       // HTTP reply status code, e.g. 200
@@ -33,17 +33,17 @@ struct vz_request_info {
   } http_headers[64];    // Maximum 64 headers
 };
 
-// Various events on which user-defined function is called by Mongoose.
+// Various events on which user-defined function is called by Vizsla.
 enum vz_event {
   MG_NEW_REQUEST,   // New HTTP request has arrived from the client
   MG_HTTP_ERROR,    // HTTP error must be returned to the client
-  MG_EVENT_LOG,     // Mongoose logs an event, request_info.log_message
-  MG_INIT_SSL,      // Mongoose initializes SSL. Instead of vz_connection *,
+  MG_EVENT_LOG,     // Vizsla logs an event, request_info.log_message
+  MG_INIT_SSL,      // Vizsla initializes SSL. Instead of vz_connection *,
                     // SSL context is passed to the callback function.
-  MG_REQUEST_COMPLETE  // Mongoose has finished handling the request
+  MG_REQUEST_COMPLETE  // Vizsla has finished handling the request
 };
 
-// Prototype for the user-defined function. Mongoose calls this function
+// Prototype for the user-defined function. Vizsla calls this function
 // on every MG_* event.
 //
 // Parameters:
@@ -54,11 +54,11 @@ enum vz_event {
 //
 // Return:
 //   If handler returns non-NULL, that means that handler has processed the
-//   request by sending appropriate HTTP reply to the client. Mongoose treats
+//   request by sending appropriate HTTP reply to the client. Vizsla treats
 //   the request as served.
 //   If handler returns NULL, that means that handler has not processed
 //   the request. Handler must not send any data to the client in this case.
-//   Mongoose proceeds with request handling as if nothing happened.
+//   Vizsla proceeds with request handling as if nothing happened.
 typedef void * (*vz_callback_t)(enum vz_event event,
                                 struct vz_connection *conn,
                                 const struct vz_request_info *request_info);
@@ -69,7 +69,7 @@ typedef void * (*vz_callback_t)(enum vz_event event,
 // Parameters:
 //   callback: user defined event handling function or NULL.
 //   options: NULL terminated list of option_name, option_value pairs that
-//            specify Mongoose configuration parameters.
+//            specify Vizsla configuration parameters.
 //
 // Side-effects: on UNIX, ignores SIGCHLD and SIGPIPE signals. If custom
 //    processing is required for these, signal handlers must be set up
@@ -94,13 +94,13 @@ struct vz_context *vz_start(vz_callback_t callback, void *user_data,
 // Stop the web server.
 //
 // Must be called last, when an application wants to stop the web server and
-// release all associated resources. This function blocks until all Mongoose
+// release all associated resources. This function blocks until all Vizsla
 // threads are stopped. Context pointer becomes invalid.
 void vz_stop(struct vz_context *);
 
 
 // Get the value of particular configuration parameter.
-// The value returned is read-only. Mongoose does not allow changing
+// The value returned is read-only. Vizsla does not allow changing
 // configuration at run time.
 // If given parameter name is not valid, NULL is returned. For valid
 // names, return value is guaranteed to be non-NULL. If parameter is not
@@ -198,7 +198,7 @@ int vz_get_cookie(const struct vz_connection *,
                   const char *cookie_name, char *buf, size_t buf_len);
 
 
-// Return Mongoose version.
+// Return Vizsla version.
 const char *vz_version(void);
 
 
@@ -215,4 +215,4 @@ void vz_md5(char *buf, ...);
 }
 #endif // __cplusplus
 
-#endif // MONGOOSE_HEADER_INCLUDED
+#endif // VIZSLA_HEADER_INCLUDED
