@@ -1,5 +1,4 @@
-# This file is part of Mongoose project, http://code.google.com/p/mongoose
-# $Id: Makefile 473 2009-09-02 11:20:06Z valenok $
+# This file is taken from Mongoose project, http://code.google.com/p/mongoose
 
 PROG=	vizsla
 
@@ -16,7 +15,7 @@ PROG=	vizsla
 
 
 ##########################################################################
-###                 UNIX build: linux, bsd, mac, rtems
+###                 UNIX build: linux
 ##########################################################################
 
 ##CFLAGS = -W -Wall -O2 $(COPT)
@@ -30,26 +29,10 @@ CC = g++
 # "-Wl,--as-needed" turned on by default  in cc command.
 # Also, this is turned in many other distros in static linkage builds.
 all:
-	$(CC) vizsla.c main.c -o $(PROG) $(LINFLAGS)
+	$(CC) vizsla_http.c vizsla.c -o $(PROG) $(LINFLAGS)
+	$(MAKE) -C ./polarssl
 
-
-##########################################################################
-###            Manuals, cleanup, test, release
-##########################################################################
-
-man:
-	groff -man -T ascii vizsla.1 | col -b > vizsla.txt
-	groff -man -T ascii vizsla.1 | less
-
-# "TEST=unit make test" - perform unit test only
-# "TEST=embedded" - test embedded API by building and testing test/embed.c
-# "TEST=basic_tests" - perform basic tests only (no CGI, SSI..)
-test: do_test
-do_test:
-	perl test/test.pl $(TEST)
-
-release: clean
-	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar --exclude \*.hg --exclude \*.svn --exclude \*.swp --exclude \*.nfs\* -czf x mongoose && mv x mongoose/$$F
 
 clean:
-	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz
+	rm -rf *.o vizsla
+	$(MAKE) -C ./polarssl clean

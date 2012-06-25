@@ -1,2 +1,0 @@
-[1339166156] [error] [client 127.0.0.1] GET /timeout.cgi: spawn_process: execle(timeout.cgi): Permission denied
-[1339387117] [error] [client 127.0.0.1] GET /timeout.cgi: spawn_process: execle(timeout.cgi): Permission denied
